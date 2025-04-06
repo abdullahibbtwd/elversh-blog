@@ -1,10 +1,16 @@
 import { ConnectDB } from "@/lib/config/db";
 import BlogModel from "@/lib/model/BloogModel";
 const { NextResponse } = require("next/server");
-import { writeFile } from "fs/promises";
-//const fs = require("fs");
+import cloudinary from "cloudinary";
+import { revalidatePath } from "next/cache";
 
-import fs from 'fs/promises'; // Use fs.promises for async file operations
+cloudinary.v2.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+import fs from "fs/promises";
 
 const LoadDB = async () => {
   await ConnectDB();
@@ -30,19 +36,25 @@ export async function GET(req) {
 export async function POST(req) {
   const formData = await req.formData();
 
-  const timestamp = Date.now();
-  const image = formData.get("image");
-  const imageByteData = await image.arrayBuffer();
-  const buffer = Buffer.from(imageByteData);
-  const path = `./public/${timestamp}_${image.name}`;
-  await writeFile(path, buffer);
+  const images = formData.get("image");
+  const filesArray = Array.isArray(images) ? images : [images];
+  const imageUrls = await Promise.all(
+    filesArray.map(async (image) => {
+      const buffer = await image.arrayBuffer();
+      const base64Image = Buffer.from(buffer).toString("base64");
+      const dataURI = `data:${image.type};base64,${base64Image}`;
 
-  const imageUrl = `/${timestamp}_${image.name}`;
+      const result = await cloudinary.v2.uploader.upload(dataURI, {
+        folder: "blog",
+      });
+      return result.secure_url;
+    })
+  );
   const blogData = {
     title: `${formData.get("title")}`,
     description: `${formData.get("description")}`,
     category: `${formData.get("category")}`,
-    image: `${imageUrl}`,
+    image: `${imageUrls}`,
   };
   await BlogModel.create(blogData);
 
@@ -51,10 +63,9 @@ export async function POST(req) {
 //Api for delete
 
 export async function DELETE(req) {
-  const id = await req.nextUrl.searchParams.get('id');
+  const id = await req.nextUrl.searchParams.get("id");
   const blog = await BlogModel.findById(id);
   fs.unlink(`./public${blog.image}`, () => {});
   await BlogModel.findByIdAndDelete(id);
-  return NextResponse.json({msg:"Deleted"})
+  return NextResponse.json({ msg: "Deleted" });
 }
-
