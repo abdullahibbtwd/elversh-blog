@@ -3,6 +3,8 @@ import "./globals.css";
 import { PostProvider } from "./AppContext/Context";
 import Navbar from "./Components/Navbar";
 import { ToastContainer, toast } from "react-toastify";
+import { Analytics } from '@vercel/analytics/react';
+
 
 export const metadata = {
   title: "Elversh Blog",
@@ -18,6 +20,7 @@ export default function RootLayout({ children }) {
 
           <Navbar />
           {children}
+          <Analytics/>
         </PostProvider>
       </body>
     </html>
